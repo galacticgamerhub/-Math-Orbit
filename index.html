@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Play Math Orbit, a fun HTML5 space survival game where you solve math problems to dodge asteroids!">
+    <meta name="keywords" content="math orbit, html5 game, browser game, space game, math game, free game">
+    <title>Math Orbit</title>
+    <style>
+      body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+canvas {
+    border: 1px solid white;
+}
+
+#score, #mathProblem {
+    position: absolute;
+    color: white;
+    font-family: Arial, sans-serif;
+    font-size: 20px;
+    z-index: 10; /* Ensure text stays on top of canvas */
+}
+
+#score {
+    top: 10px;
+    left: 10px;
+    padding: 5px;
+    background: rgba(0, 0, 0, 0.7); /* Slight background for readability */
+}
+
+#mathProblem {
+    top: 40px; /* Move down to avoid overlapping score */
+    left: 10px;
+    padding: 5px;
+    background: rgba(0, 0, 0, 0.7); /* Slight background for readability */
+}
+
+#answerInput {
+    position: absolute;
+    top: 70px; /* Move down further to avoid overlapping math problem */
+    left: 10px;
+    padding: 5px;
+    font-size: 16px;
+    display: none;
+    z-index: 11; /* Ensure input is on top */
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 600px) {
+    #score, #mathProblem {
+        font-size: 16px; /* Smaller text on mobile */
+        padding: 3px;
+    }
+    #answerInput {
+        font-size: 14px;
+        padding: 3px;
+    }
+    canvas {
+        width: 100vw;
+        height: 60vh; /* Adjust for smaller screens */
+    }
+}
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <div id="mathProblem"></div>
+    <input type="number" id="answerInput" placeholder="Enter answer">
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const mathProblemElement = document.getElementById('mathProblem');
+        const answerInput = document.getElementById('answerInput');
+
+        // Game objects
+        const spaceship = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 15,
+            angle: 0,
+            speed: 0.05,
+            color: 'white'
+        };
+
+        const asteroids = [];
+        let score = 0;
+        let lives = 3;
+        let currentProblem = null;
+        let gameOver = false;
+
+        // Handle keyboard controls
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.key] = true);
+        document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        // Generate random math problem (simple arithmetic or algebra)
+        function generateMathProblem() {
+            const types = ['add', 'subtract', 'multiply', 'solve'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            let problem, answer;
+
+            if (type === 'add') {
+                const a = Math.floor(Math.random() * 10) + 1;
+                const b = Math.floor(Math.random() * 10) + 1;
+                problem = `${a} + ${b} = ?`;
+                answer = a + b;
+            } else if (type === 'subtract') {
+                const a = Math.floor(Math.random() * 10) + 1;
+                const b = Math.floor(Math.random() * 10) + 1;
+                problem = `${Math.max(a, b)} - ${Math.min(a, b)} = ?`;
+                answer = Math.max(a, b) - Math.min(a, b);
+            } else if (type === 'multiply') {
+                const a = Math.floor(Math.random() * 5) + 1;
+                const b = Math.floor(Math.random() * 5) + 1;
+                problem = `${a} × ${b} = ?`;
+                answer = a * b;
+            } else if (type === 'solve') {
+                const x = Math.floor(Math.random() * 10) + 1;
+                problem = `x + ${x} = ${2 * x}, solve for x`;
+                answer = x;
+            }
+
+            currentProblem = { problem, answer };
+            mathProblemElement.textContent = problem;
+            answerInput.value = '';
+            answerInput.style.display = 'block';
+            answerInput.focus();
+        }
+
+        // Check math answer
+        answerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const userAnswer = parseInt(answerInput.value);
+                if (userAnswer === currentProblem.answer) {
+                    score += 20;
+                    spaceship.shield = true;
+                    setTimeout(() => spaceship.shield = false, 5000); // Shield lasts 5 seconds
+                } else {
+                    lives--;
+                    if (lives <= 0) gameOver = true;
+                    spawnAsteroid(); // Penalty for wrong answer
+                }
+                currentProblem = null;
+                mathProblemElement.textContent = '';
+                answerInput.style.display = 'none';
+            }
+        });
+
+        // Spawn asteroids in circular orbits
+        function spawnAsteroid() {
+            if (Math.random() < 0.02) {
+                const angle = Math.random() * 2 * Math.PI;
+                const radius = Math.random() * 100 + 50; // Orbit radius
+                asteroids.push({
+                    angle: angle,
+                    radius: radius,
+                    speed: 0.02,
+                    size: 20,
+                    color: 'gray'
+                });
+            }
+        }
+
+        // Move spaceship in orbit
+        function moveSpaceship() {
+            if (keys['ArrowLeft'] || keys['a']) spaceship.angle -= spaceship.speed;
+            if (keys['ArrowRight'] || keys['d']) spaceship.angle += spaceship.speed;
+
+            spaceship.x = canvas.width / 2 + Math.cos(spaceship.angle) * 150;
+            spaceship.y = canvas.height / 2 + Math.sin(spaceship.angle) * 150;
+        }
+
+        // Update and draw asteroids
+        function updateAsteroids() {
+            asteroids.forEach((asteroid, index) => {
+                asteroid.angle += asteroid.speed;
+                asteroid.x = canvas.width / 2 + Math.cos(asteroid.angle) * asteroid.radius;
+                asteroid.y = canvas.height / 2 + Math.sin(asteroid.angle) * asteroid.radius;
+
+                ctx.fillStyle = asteroid.color;
+                ctx.beginPath();
+                ctx.arc(asteroid.x, asteroid.y, asteroid.size, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Collision detection with spaceship
+                const dx = spaceship.x - asteroid.x;
+                const dy = spaceship.y - asteroid.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < spaceship.radius + asteroid.size && !spaceship.shield) {
+                    lives--;
+                    if (lives <= 0) gameOver = true;
+                    asteroids.splice(index, 1);
+                }
+            });
+        }
+
+        // Draw planet and game objects
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw planet
+            ctx.fillStyle = 'blue';
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Draw spaceship
+            ctx.fillStyle = spaceship.color;
+            ctx.beginPath();
+            ctx.arc(spaceship.x, spaceship.y, spaceship.radius, 0, 2 * Math.PI);
+            ctx.fill();
+
+            updateAsteroids();
+
+            scoreElement.textContent = `Score: ${score} | Lives: ${lives}`;
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameOver) {
+                moveSpaceship();
+                draw();
+                spawnAsteroid();
+                if (!currentProblem && Math.random() < 0.01) generateMathProblem(); // Spawn math problem
+                requestAnimationFrame(gameLoop);
+            } else {
+                ctx.fillStyle = 'red';
+                ctx.font = '30px Arial';
+                ctx.fillText('Game Over!', canvas.width / 2 - 80, canvas.height / 2);
+            }
+        }
+
+        // Start the game
+        gameLoop();
+
+        // Handle mobile touch controls (optional)
+        canvas.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const angle = Math.atan2(touch.clientY - rect.top - canvas.height / 2, touch.clientX - rect.left - canvas.width / 2);
+            spaceship.angle = angle;
+        });
+
+        // Adjust canvas size for mobile responsiveness
+        function resizeCanvas() {
+            canvas.width = window.innerWidth > 600 ? 600 : window.innerWidth - 20;
+            canvas.height = window.innerHeight > 400 ? 400 : window.innerHeight - 20;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+    </script>
+</body>
+</html>
